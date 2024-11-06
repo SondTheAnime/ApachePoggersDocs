@@ -42,6 +42,14 @@ apt-get install apache2 -y || erro "Falha ao instalar Apache2"
 log "Instalando unzip..."
 apt-get install unzip -y || erro "Falha ao instalar unzip"
 
+# Verificar e instalar git
+if ! command -v git &> /dev/null; then
+    log "Instalando git..."
+    apt-get install git -y || erro "Falha ao instalar git"
+else
+    log "Git já está instalado"
+fi
+
 # Instalar Python e dependências
 log "Instalando Python e dependências..."
 apt-get install python3 python3-pip python3-venv libpq-dev python3-dev -y || erro "Falha ao instalar Python"
@@ -49,12 +57,7 @@ apt-get install python3 python3-pip python3-venv libpq-dev python3-dev -y || err
 # Baixar a aplicação do GitHub
 log "Baixando aplicação do GitHub..."
 cd /tmp || erro "Falha ao acessar diretório /tmp"
-wget https://github.com/SondTheAnime/poggersdocs/archive/refs/heads/main.zip -O docestagio.zip || erro "Falha ao baixar aplicação"
-
-# Descompactar arquivo
-log "Descompactando arquivo..."
-unzip -o docestagio.zip || erro "Falha ao descompactar arquivo"
-mv poggersdocs-main docestagio || erro "Falha ao renomear diretório"
+git clone https://github.com/SondTheAnime/poggersdocs.git docestagio || erro "Falha ao clonar repositório"
 
 # Criar diretório da aplicação
 log "Configurando diretório da aplicação..."
@@ -101,8 +104,12 @@ cat > /etc/apache2/sites-available/docestagio.conf << EOF
 <VirtualHost *:80>
     ServerName localhost
     
-    ProxyPass / http://unix:/opt/docestagio/docestagio.sock|http://127.0.0.1:8000/
-    ProxyPassReverse / http://unix:/opt/docestagio/docestagio.sock|http://127.0.0.1:8000/
+    ProxyPass / unix:/opt/docestagio/docestagio.sock|http://localhost/
+    ProxyPassReverse / unix:/opt/docestagio/docestagio.sock|http://localhost/
+
+    ProxyPreserveHost On
+    RequestHeader set X-Forwarded-Proto "http"
+    RequestHeader set X-Forwarded-Port "80"
 
     Alias /static/ /opt/docestagio/static/
     <Directory /opt/docestagio/static>
@@ -114,6 +121,8 @@ EOF
 # Ativar módulos do Apache necessários
 a2enmod proxy
 a2enmod proxy_http
+a2enmod headers
+a2dissite 000-default
 a2ensite docestagio
 
 # Configurar permissões
